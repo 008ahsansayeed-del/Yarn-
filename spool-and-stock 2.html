@@ -1,0 +1,988 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Spool &amp; Stock — Yarn Inventory Ledger</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ecru:#F5F0E6;
+    --paper:#FBF8F2;
+    --ink:#2B2620;
+    --ink-soft:#6B6253;
+    --indigo:#2F4868;
+    --indigo-dark:#203349;
+    --rust:#C1502E;
+    --rust-bg:#F7E3DA;
+    --sage:#5E8567;
+    --sage-bg:#E3EBE2;
+    --gold:#C99A3C;
+    --line:#E2D9C8;
+    --line-soft:#ECE5D6;
+    --radius:10px;
+    --shadow:0 1px 2px rgba(43,38,32,0.06), 0 4px 14px rgba(43,38,32,0.05);
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--ecru);
+    color:var(--ink);
+    font-family:'Inter',system-ui,-apple-system,sans-serif;
+    -webkit-font-smoothing:antialiased;
+    min-height:100vh;
+  }
+  .wrap{max-width:980px;margin:0 auto;padding:18px 16px 80px;}
+  h1,h2,h3{font-family:'Fraunces',serif;margin:0;}
+  .mono{font-family:'IBM Plex Mono',monospace;}
+  a{color:inherit;}
+
+  /* Header */
+  header.app-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:6px 0 18px;}
+  .brand{display:flex;align-items:center;gap:10px;}
+  .brand-mark{
+    width:40px;height:40px;border-radius:50%;
+    background:conic-gradient(from 200deg, var(--indigo), var(--gold), var(--rust), var(--sage), var(--indigo));
+    flex-shrink:0;
+    position:relative;
+    box-shadow:inset 0 0 0 3px var(--paper);
+  }
+  .brand h1{font-size:22px;font-weight:700;color:var(--ink);letter-spacing:-0.01em;}
+  .brand .sub{font-size:12.5px;color:var(--ink-soft);margin-top:2px;}
+  #todayLabel{font-weight:600;color:var(--indigo);}
+  .head-actions{display:flex;gap:8px;align-items:center;}
+  .icon-btn{
+    width:38px;height:38px;border-radius:50%;border:1px solid var(--line);
+    background:var(--paper);display:flex;align-items:center;justify-content:center;
+    cursor:pointer;font-size:16px;color:var(--ink-soft);transition:.15s;
+  }
+  .icon-btn:hover{border-color:var(--indigo);color:var(--indigo);}
+
+  /* Tabs */
+  nav.tabs{display:flex;gap:4px;overflow-x:auto;border-bottom:1px solid var(--line);margin-bottom:20px;-webkit-overflow-scrolling:touch;}
+  nav.tabs button{
+    appearance:none;border:none;background:none;cursor:pointer;
+    font-family:'Inter';font-size:14.5px;font-weight:600;color:var(--ink-soft);
+    padding:10px 14px;border-bottom:2.5px solid transparent;white-space:nowrap;
+  }
+  nav.tabs button.active{color:var(--indigo);border-bottom-color:var(--gold);}
+
+  .tab-panel{display:none;}
+  .tab-panel.active{display:block;animation:fade .25s ease;}
+  @keyframes fade{from{opacity:0;transform:translateY(3px);}to{opacity:1;transform:none;}}
+
+  /* Stat cards */
+  .stat-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:22px;}
+  .stat-card{background:var(--paper);border:1px solid var(--line);border-radius:var(--radius);padding:14px 16px;box-shadow:var(--shadow);}
+  .stat-card .label{font-size:11.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-soft);font-weight:600;}
+  .stat-card .value{font-family:'IBM Plex Mono';font-size:24px;font-weight:600;margin-top:4px;color:var(--ink);}
+  .stat-card.warn .value{color:var(--rust);}
+  .stat-card.ok .value{color:var(--sage);}
+
+  section.block{margin-bottom:28px;}
+  .block-head{display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:12px;}
+  .block-head h2{font-size:17px;font-weight:600;}
+  .block-head .hint{font-size:12.5px;color:var(--ink-soft);}
+
+  /* Buttons */
+  .btn{
+    font-family:'Inter';font-weight:600;font-size:13.5px;border-radius:8px;border:1px solid transparent;
+    padding:9px 16px;cursor:pointer;transition:.15s;display:inline-flex;align-items:center;gap:6px;
+  }
+  .btn-primary{background:var(--indigo);color:#fff;}
+  .btn-primary:hover{background:var(--indigo-dark);}
+  .btn-ghost{background:transparent;border:1px solid var(--line);color:var(--ink);}
+  .btn-ghost:hover{border-color:var(--indigo);color:var(--indigo);}
+  .btn-danger{background:transparent;border:1px solid var(--rust);color:var(--rust);}
+  .btn-danger:hover{background:var(--rust);color:#fff;}
+  .btn-sm{padding:6px 11px;font-size:12.5px;}
+  .btn:disabled{opacity:.45;cursor:not-allowed;}
+
+  /* Tag / swing-tag inventory card */
+  .tag-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(225px,1fr));gap:12px;}
+  .tag-card{
+    position:relative;background:var(--paper);border:1px solid var(--line);
+    border-radius:4px 10px 10px 4px;padding:14px 14px 14px 34px;box-shadow:var(--shadow);
+  }
+  .tag-card::before{
+    content:'';position:absolute;left:14px;top:18px;width:9px;height:9px;border-radius:50%;
+    background:var(--ecru);border:1px solid var(--line);
+  }
+  .tag-card .strip{position:absolute;left:0;top:0;bottom:0;width:4px;border-radius:4px 0 0 4px;}
+  .status-ok .strip{background:var(--sage);}
+  .status-low .strip{background:var(--gold);}
+  .status-out .strip{background:var(--rust);}
+  .tag-top{display:flex;align-items:center;gap:8px;margin-bottom:8px;}
+  .swatch{width:18px;height:18px;border-radius:50%;border:1px solid rgba(0,0,0,.15);flex-shrink:0;}
+  .tag-count{font-family:'IBM Plex Mono';font-weight:600;font-size:14.5px;}
+  .tag-color{font-size:13px;color:var(--ink-soft);}
+  .tag-stock{font-family:'IBM Plex Mono';font-size:21px;font-weight:600;margin:4px 0 2px;}
+  .tag-stock .unit{font-size:12px;font-family:'Inter';color:var(--ink-soft);font-weight:500;}
+  .tag-meta{font-size:11.5px;color:var(--ink-soft);}
+  .status-badge{display:inline-block;font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;padding:2px 7px;border-radius:20px;margin-top:6px;}
+  .status-ok .status-badge{background:var(--sage-bg);color:var(--sage);}
+  .status-low .status-badge{background:#FBF1DD;color:#9C7322;}
+  .status-out .status-badge{background:var(--rust-bg);color:var(--rust);}
+  .tag-actions{display:flex;gap:6px;margin-top:10px;}
+
+  .empty{padding:24px;text-align:center;color:var(--ink-soft);border:1px dashed var(--line);border-radius:var(--radius);font-size:13.5px;}
+
+  /* Forms */
+  .panel{background:var(--paper);border:1px solid var(--line);border-radius:var(--radius);padding:16px;box-shadow:var(--shadow);margin-bottom:16px;}
+  .form-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;}
+  @media (max-width:560px){.form-grid{grid-template-columns:1fr;}}
+  .field label{display:block;font-size:12px;font-weight:600;color:var(--ink-soft);margin-bottom:4px;text-transform:uppercase;letter-spacing:.03em;}
+  .field input,.field select,.field textarea{
+    width:100%;font-family:'Inter';font-size:14px;padding:9px 10px;border:1px solid var(--line);
+    border-radius:7px;background:#fff;color:var(--ink);
+  }
+  .field input:focus,.field select:focus,.field textarea:focus{outline:2px solid var(--indigo);outline-offset:1px;}
+  .field.span2{grid-column:1/-1;}
+  .form-actions{display:flex;gap:8px;margin-top:14px;justify-content:flex-end;}
+
+  .chip-row{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:4px;}
+  .chip{
+    border:1px solid var(--line);background:#fff;border-radius:20px;padding:7px 14px;font-size:13px;font-weight:600;
+    cursor:pointer;color:var(--ink-soft);
+  }
+  .chip.active{background:var(--indigo);color:#fff;border-color:var(--indigo);}
+  .chip[data-flow="out"].active{background:var(--rust);border-color:var(--rust);}
+
+  /* Transactions list */
+  .txn-row{display:flex;align-items:center;gap:10px;padding:10px 6px;border-bottom:1px solid var(--line-soft);font-size:13.5px;}
+  .txn-row:last-child{border-bottom:none;}
+  .txn-date{width:64px;flex-shrink:0;color:var(--ink-soft);font-family:'IBM Plex Mono';font-size:12px;}
+  .badge{font-size:10.5px;font-weight:700;text-transform:uppercase;padding:3px 8px;border-radius:20px;flex-shrink:0;}
+  .badge-purchase{background:var(--sage-bg);color:var(--sage);}
+  .badge-sale{background:#E4EBF2;color:var(--indigo);}
+  .badge-customer_return{background:#FBF1DD;color:#9C7322;}
+  .badge-supplier_return{background:var(--rust-bg);color:var(--rust);}
+  .txn-main{flex:1;min-width:0;}
+  .txn-item{font-weight:600;}
+  .txn-party{color:var(--ink-soft);font-size:12.5px;}
+  .txn-qty{font-family:'IBM Plex Mono';font-weight:600;white-space:nowrap;}
+  .txn-actions{display:flex;gap:4px;}
+  .icon-link{background:none;border:none;cursor:pointer;color:var(--ink-soft);font-size:13px;padding:4px 6px;border-radius:5px;}
+  .icon-link:hover{color:var(--indigo);background:var(--line-soft);}
+
+  .filter-row{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;}
+  .filter-row select,.filter-row input{font-size:13px;padding:7px 9px;border:1px solid var(--line);border-radius:7px;background:#fff;font-family:'Inter';}
+
+  table.report-table{width:100%;border-collapse:collapse;font-size:13px;}
+  table.report-table th{text-align:left;font-size:11px;text-transform:uppercase;color:var(--ink-soft);padding:8px 8px;border-bottom:1px solid var(--line);}
+  table.report-table td{padding:8px 8px;border-bottom:1px solid var(--line-soft);font-family:'IBM Plex Mono';}
+  table.report-table td.txt{font-family:'Inter';}
+  table.report-table tr:last-child td{border-bottom:none;}
+
+  /* Toast */
+  #toastBox{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);z-index:80;display:flex;flex-direction:column;gap:8px;align-items:center;}
+  .toast{background:var(--ink);color:#fff;font-size:13px;padding:10px 16px;border-radius:8px;box-shadow:var(--shadow);opacity:0;transform:translateY(8px);transition:.25s;}
+  .toast.show{opacity:1;transform:none;}
+  .toast.error{background:var(--rust);}
+
+  /* Confirm modal */
+  #modalOverlay{position:fixed;inset:0;background:rgba(43,38,32,.4);display:none;align-items:center;justify-content:center;z-index:90;padding:16px;}
+  #modalOverlay.show{display:flex;}
+  .modal-box{background:var(--paper);border-radius:var(--radius);padding:20px;max-width:340px;width:100%;box-shadow:var(--shadow);}
+  .modal-box h3{font-size:16px;margin-bottom:8px;}
+  .modal-box p{font-size:13.5px;color:var(--ink-soft);margin:0 0 16px;}
+  .modal-actions{display:flex;justify-content:flex-end;gap:8px;}
+
+  .loading-screen{display:flex;align-items:center;justify-content:center;min-height:60vh;color:var(--ink-soft);font-size:14px;}
+  .save-indicator{font-size:11px;color:var(--ink-soft);}
+  .footnote{font-size:11.5px;color:var(--ink-soft);text-align:center;margin-top:30px;line-height:1.5;}
+  .save-status{font-size:11px;color:var(--ink-soft);white-space:nowrap;}
+  .save-status.error{color:var(--rust);font-weight:600;}
+  .storage-banner{background:var(--rust-bg);color:var(--rust);border:1px solid var(--rust);border-radius:8px;padding:10px 14px;font-size:12.5px;margin-bottom:14px;line-height:1.5;}
+  .storage-banner b{display:block;margin-bottom:2px;}
+  .backup-row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;border-top:1px solid var(--line);padding-top:14px;margin-top:14px;}
+  .backup-row .hint{flex:1;min-width:140px;font-size:12px;color:var(--ink-soft);}
+</style>
+</head>
+<body>
+
+<div class="wrap" id="appRoot">
+  <div class="loading-screen" id="loadingScreen">Opening your ledger…</div>
+</div>
+
+<div id="toastBox"></div>
+
+<div id="modalOverlay">
+  <div class="modal-box">
+    <h3 id="modalTitle">Are you sure?</h3>
+    <p id="modalBody"></p>
+    <div class="modal-actions">
+      <button class="btn btn-ghost btn-sm" id="modalCancel">Cancel</button>
+      <button class="btn btn-danger btn-sm" id="modalConfirm">Confirm</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+"use strict";
+
+/* ---------------- State ---------------- */
+let state = {
+  items: [],
+  transactions: [],
+  settings: { shopName: "My Yarn Store", unit: "kg", defaultThreshold: 10 },
+  loaded: false
+};
+
+let ui = {
+  activeTab: "dashboard",
+  itemFormOpen: false,
+  editingItemId: null,
+  editingTxnId: null,
+  txnType: "purchase",
+  invSearch: "",
+  txnFilter: { type: "all", itemId: "all", from: "", to: "" },
+  reportRange: { from: "", to: "" }
+};
+
+/* ---------------- Storage helpers ---------------- */
+let storageStatus = { available: null, lastError: null, lastSavedAt: null, saving: false };
+
+async function checkStorageAvailable(){
+  if(typeof window.storage === "undefined" || typeof window.storage.set !== "function"){
+    storageStatus.available = false;
+    storageStatus.lastError = "window.storage is not present in this view";
+    return false;
+  }
+  try{
+    const probeKey = "_health_check";
+    const probeVal = String(Date.now());
+    await window.storage.set(probeKey, probeVal, false);
+    const res = await window.storage.get(probeKey, false);
+    storageStatus.available = !!(res && res.value === probeVal);
+    if(!storageStatus.available) storageStatus.lastError = "wrote a test value but couldn't read it back";
+    return storageStatus.available;
+  }catch(e){
+    storageStatus.available = false;
+    storageStatus.lastError = (e && e.message) ? e.message : String(e);
+    return false;
+  }
+}
+
+async function getStored(key, fallback){
+  if(storageStatus.available === false) return fallback;
+  try{
+    const res = await window.storage.get(key, false);
+    if(res && typeof res.value === "string") return JSON.parse(res.value);
+    return fallback;
+  }catch(e){ return fallback; }
+}
+async function setStored(key, value){
+  if(storageStatus.available === false) return false;
+  storageStatus.saving = true;
+  try{
+    const res = await window.storage.set(key, JSON.stringify(value), false);
+    if(!res) throw new Error("no result returned from storage.set");
+    storageStatus.lastSavedAt = new Date();
+    storageStatus.saving = false;
+    renderSaveStatus();
+    return true;
+  }catch(e){
+    storageStatus.saving = false;
+    storageStatus.lastError = (e && e.message) ? e.message : String(e);
+    renderSaveStatus();
+    showToast("Couldn't save — use Download backup in Settings as a safety net", "error");
+    return false;
+  }
+}
+
+async function saveItems(){ await setStored("items", state.items); }
+async function saveTxns(){ await setStored("transactions", state.transactions); }
+async function saveSettings(){ await setStored("settings", state.settings); }
+
+function renderSaveStatus(){
+  const el = document.getElementById("saveStatus");
+  if(!el) return;
+  if(storageStatus.available === false){
+    el.textContent = "Not saving — back up manually";
+    el.classList.add("error");
+  } else if(storageStatus.lastSavedAt){
+    el.textContent = "Saved " + storageStatus.lastSavedAt.toLocaleTimeString(undefined,{hour:"2-digit",minute:"2-digit"});
+    el.classList.remove("error");
+  } else {
+    el.textContent = "";
+    el.classList.remove("error");
+  }
+}
+function renderStorageBanner(){
+  const el = document.getElementById("storageBanner");
+  if(!el) return;
+  if(storageStatus.available === false){
+    el.innerHTML = `<div class="storage-banner"><b>Auto-save isn't working in this view right now.</b>Nothing typed here will survive closing the tab. Use ⚙ Settings → Download backup before you leave, and Restore backup when you come back.</div>`;
+  } else {
+    el.innerHTML = "";
+  }
+}
+
+/* ---------------- Backup / restore ---------------- */
+function exportBackup(){
+  const payload = { app: "spool-and-stock", exportedAt: new Date().toISOString(), items: state.items, transactions: state.transactions, settings: state.settings };
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = "spool-and-stock-backup-" + todayStr() + ".json";
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  showToast("Backup downloaded");
+}
+function handleImportBackup(e){
+  const file = e.target.files && e.target.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    try{
+      const data = JSON.parse(reader.result);
+      if(!data || !Array.isArray(data.items) || !Array.isArray(data.transactions)){
+        showToast("That file doesn't look like a Spool & Stock backup", "error");
+        return;
+      }
+      confirmAction("Restore this backup?", "This replaces everything currently in the app with the contents of the backup file.", async () => {
+        state.items = data.items;
+        state.transactions = data.transactions;
+        state.settings = data.settings || state.settings;
+        await saveItems(); await saveTxns(); await saveSettings();
+        showToast("Backup restored");
+        renderShell(); renderTabs();
+      });
+    }catch(err){
+      showToast("Couldn't read that file", "error");
+    }
+  };
+  reader.readAsText(file);
+  e.target.value = "";
+}
+
+/* ---------------- Utilities ---------------- */
+function uid(p){ return p + "_" + Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
+function todayStr(){
+  const d = new Date();
+  const off = d.getTimezoneOffset();
+  return new Date(d.getTime() - off*60000).toISOString().slice(0,10);
+}
+function fmtDate(s){
+  if(!s) return "—";
+  const d = new Date(s + "T00:00:00");
+  return d.toLocaleDateString(undefined, { day:"2-digit", month:"short", year:"numeric" });
+}
+function fmtNum(n){
+  n = Number(n)||0;
+  return n.toLocaleString(undefined, { maximumFractionDigits: 2 });
+}
+function escapeHTML(s){
+  return String(s==null?"":s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+}
+function clamp(n,min,max){ return Math.min(max, Math.max(min, n)); }
+
+const TYPE_LABELS = {
+  purchase: "Purchase",
+  sale: "Sale",
+  customer_return: "Customer return",
+  supplier_return: "Supplier return"
+};
+const TYPE_FLOW = { purchase: "in", sale: "out", customer_return: "in", supplier_return: "out" };
+
+function itemLabel(item){
+  return (item.count ? item.count : "—") + (item.color ? " · " + item.color : "");
+}
+function findItem(id){ return state.items.find(i => i.id === id); }
+
+function computeStockAsOf(itemId, exclusiveBeforeDate){
+  const item = findItem(itemId);
+  if(!item) return 0;
+  let stock = Number(item.openingStock) || 0;
+  state.transactions.forEach(t => {
+    if(t.itemId !== itemId) return;
+    if(exclusiveBeforeDate && !(t.date < exclusiveBeforeDate)) return;
+    const q = Number(t.qty) || 0;
+    if(TYPE_FLOW[t.type] === "in") stock += q; else stock -= q;
+  });
+  return stock;
+}
+function computeStock(itemId){ return computeStockAsOf(itemId, null); }
+
+function statusOf(stock, threshold){
+  if(stock <= 0) return "out";
+  if(stock <= threshold) return "low";
+  return "ok";
+}
+
+/* ---------------- Toast ---------------- */
+function showToast(msg, kind){
+  const box = document.getElementById("toastBox");
+  const el = document.createElement("div");
+  el.className = "toast" + (kind === "error" ? " error" : "");
+  el.textContent = msg;
+  box.appendChild(el);
+  requestAnimationFrame(() => el.classList.add("show"));
+  setTimeout(() => {
+    el.classList.remove("show");
+    setTimeout(() => el.remove(), 300);
+  }, 2400);
+}
+
+/* ---------------- Confirm modal ---------------- */
+function confirmAction(title, body, onConfirm){
+  const overlay = document.getElementById("modalOverlay");
+  document.getElementById("modalTitle").textContent = title;
+  document.getElementById("modalBody").textContent = body;
+  overlay.classList.add("show");
+  const yes = document.getElementById("modalConfirm");
+  const no = document.getElementById("modalCancel");
+  function cleanup(){ overlay.classList.remove("show"); yes.removeEventListener("click", onYes); no.removeEventListener("click", onNo); }
+  function onYes(){ cleanup(); onConfirm(); }
+  function onNo(){ cleanup(); }
+  yes.addEventListener("click", onYes);
+  no.addEventListener("click", onNo);
+}
+
+/* ---------------- Rendering: shell ---------------- */
+function renderShell(){
+  const root = document.getElementById("appRoot");
+  root.innerHTML = `
+    <header class="app-head">
+      <div class="brand">
+        <div class="brand-mark"></div>
+        <div>
+          <h1>Spool &amp; Stock</h1>
+          <div class="sub">${escapeHTML(state.settings.shopName)} · <span id="todayLabel"></span></div>
+        </div>
+      </div>
+      <div class="head-actions">
+        <span class="save-status" id="saveStatus"></span>
+        <button class="icon-btn" id="settingsBtn" title="Settings">⚙</button>
+      </div>
+    </header>
+
+    <div id="storageBanner"></div>
+
+    <div class="panel" id="settingsPanel" style="display:none;">
+      <div class="form-grid">
+        <div class="field"><label>Shop name</label><input id="setShopName" type="text" /></div>
+        <div class="field"><label>Default unit</label>
+          <select id="setUnit">
+            <option value="kg">kg</option><option value="g">g</option>
+            <option value="cones">cones</option><option value="bags">bags</option>
+            <option value="boxes">boxes</option><option value="pcs">pcs</option>
+          </select>
+        </div>
+        <div class="field"><label>Default low-stock threshold</label><input id="setThreshold" type="number" min="0" step="0.5" /></div>
+      </div>
+      <div class="form-actions" style="justify-content:space-between;">
+        <button class="btn btn-danger btn-sm" id="resetDataBtn">Reset all data</button>
+        <button class="btn btn-primary btn-sm" id="saveSettingsBtn">Save settings</button>
+      </div>
+      <div class="backup-row">
+        <span class="hint">Back up your data to a file, or restore from a backup you saved earlier.</span>
+        <button class="btn btn-ghost btn-sm" id="exportBackupBtn">Download backup</button>
+        <button class="btn btn-ghost btn-sm" id="importBackupBtn">Restore backup</button>
+        <input type="file" id="importBackupFile" accept="application/json" style="display:none;" />
+      </div>
+    </div>
+
+    <nav class="tabs" id="tabNav">
+      <button data-tab="dashboard">Dashboard</button>
+      <button data-tab="inventory">Inventory</button>
+      <button data-tab="transactions">Transactions</button>
+      <button data-tab="reports">Reports</button>
+    </nav>
+
+    <section class="tab-panel" id="panel-dashboard"></section>
+    <section class="tab-panel" id="panel-inventory"></section>
+    <section class="tab-panel" id="panel-transactions"></section>
+    <section class="tab-panel" id="panel-reports"></section>
+
+    <div class="footnote">Your stock data saves automatically as you work. As a safety net, use ⚙ Settings → Download backup now and then — it's a small file you can restore from if anything ever looks off.</div>
+  `;
+  document.getElementById("todayLabel").textContent = fmtDate(todayStr());
+  document.getElementById("settingsBtn").addEventListener("click", toggleSettingsPanel);
+  document.querySelectorAll("#tabNav button").forEach(btn => {
+    btn.addEventListener("click", () => { ui.activeTab = btn.dataset.tab; renderTabs(); });
+  });
+  document.getElementById("saveSettingsBtn").addEventListener("click", async () => {
+    state.settings.shopName = document.getElementById("setShopName").value.trim() || "My Yarn Store";
+    state.settings.unit = document.getElementById("setUnit").value;
+    state.settings.defaultThreshold = Number(document.getElementById("setThreshold").value) || 0;
+    await saveSettings();
+    showToast("Settings saved");
+    renderShell(); renderTabs();
+  });
+  document.getElementById("resetDataBtn").addEventListener("click", () => {
+    confirmAction("Reset everything?", "This permanently deletes all yarn items and transaction history. This can't be undone.", async () => {
+      state.items = []; state.transactions = [];
+      state.settings = { shopName: "My Yarn Store", unit: "kg", defaultThreshold: 10 };
+      await saveItems(); await saveTxns(); await saveSettings();
+      showToast("All data reset");
+      renderShell(); renderTabs();
+    });
+  });
+  document.getElementById("exportBackupBtn").addEventListener("click", exportBackup);
+  document.getElementById("importBackupBtn").addEventListener("click", () => document.getElementById("importBackupFile").click());
+  document.getElementById("importBackupFile").addEventListener("change", handleImportBackup);
+
+  renderStorageBanner();
+  renderSaveStatus();
+
+  // populate settings fields
+  document.getElementById("setShopName").value = state.settings.shopName;
+  document.getElementById("setUnit").value = state.settings.unit;
+  document.getElementById("setThreshold").value = state.settings.defaultThreshold;
+}
+function toggleSettingsPanel(){
+  const p = document.getElementById("settingsPanel");
+  p.style.display = p.style.display === "none" ? "block" : "none";
+}
+function renderTabs(){
+  document.querySelectorAll("#tabNav button").forEach(b => b.classList.toggle("active", b.dataset.tab === ui.activeTab));
+  ["dashboard","inventory","transactions","reports"].forEach(t => {
+    document.getElementById("panel-" + t).classList.toggle("active", t === ui.activeTab);
+  });
+  if(ui.activeTab === "dashboard") renderDashboard();
+  if(ui.activeTab === "inventory") renderInventory();
+  if(ui.activeTab === "transactions") renderTransactions();
+  if(ui.activeTab === "reports") renderReports();
+}
+
+/* ---------------- Dashboard ---------------- */
+function renderDashboard(){
+  const panel = document.getElementById("panel-dashboard");
+  const itemsWithStock = state.items.map(it => ({ it, stock: computeStock(it.id), status: statusOf(computeStock(it.id), Number(it.threshold)||0) }));
+  const totalStock = itemsWithStock.reduce((s,x) => s + x.stock, 0);
+  const lowItems = itemsWithStock.filter(x => x.status !== "ok").sort((a,b) => a.stock - b.stock);
+  const todays = state.transactions.filter(t => t.date === todayStr());
+
+  panel.innerHTML = `
+    <div class="stat-row">
+      <div class="stat-card"><div class="label">Total stock</div><div class="value">${fmtNum(totalStock)} <span style="font-size:13px;">${escapeHTML(state.settings.unit)}</span></div></div>
+      <div class="stat-card"><div class="label">Colour / count types</div><div class="value">${state.items.length}</div></div>
+      <div class="stat-card ${lowItems.length ? 'warn' : 'ok'}"><div class="label">Running low</div><div class="value">${lowItems.length}</div></div>
+      <div class="stat-card"><div class="label">Today's entries</div><div class="value">${todays.length}</div></div>
+    </div>
+
+    <section class="block">
+      <div class="block-head"><h2>Running low right now</h2><span class="hint">at or below threshold</span></div>
+      ${lowItems.length === 0
+        ? `<div class="empty">${state.items.length ? "Every colour is well stocked. Nothing needs reordering today." : "Add your yarn items in the Inventory tab to start tracking stock."}</div>`
+        : `<div class="tag-grid">${lowItems.map(x => tagCardHTML(x.it, x.stock, x.status, true)).join("")}</div>`}
+    </section>
+
+    <section class="block">
+      <div class="block-head"><h2>Recent activity</h2><span class="hint"><a href="#" id="goTxn" style="text-decoration:underline;">view all</a></span></div>
+      ${recentTxnHTML()}
+    </section>
+  `;
+  const goTxn = document.getElementById("goTxn");
+  if(goTxn) goTxn.addEventListener("click", (e) => { e.preventDefault(); ui.activeTab = "transactions"; renderTabs(); });
+}
+function recentTxnHTML(){
+  const list = [...state.transactions].sort((a,b) => (b.date+b.id).localeCompare(a.date+a.id)).slice(0,6);
+  if(list.length === 0) return `<div class="empty">No purchases, sales or returns logged yet.</div>`;
+  return `<div class="panel" style="padding:4px 10px;">` + list.map(t => txnRowHTML(t, false)).join("") + `</div>`;
+}
+
+/* ---------------- Inventory ---------------- */
+function tagCardHTML(item, stock, status, compact){
+  const threshold = Number(item.threshold)||0;
+  return `
+  <div class="tag-card status-${status}" data-item-id="${item.id}">
+    <div class="strip"></div>
+    <div class="tag-top">
+      <span class="swatch" style="background:${escapeHTML(item.colorHex||'#999')};"></span>
+      <div>
+        <div class="tag-count">${escapeHTML(item.count||"—")}</div>
+        <div class="tag-color">${escapeHTML(item.color||"—")}</div>
+      </div>
+    </div>
+    <div class="tag-stock">${fmtNum(stock)} <span class="unit">${escapeHTML(item.unit||state.settings.unit)}</span></div>
+    <div class="tag-meta">Low-stock line: ${fmtNum(threshold)} ${escapeHTML(item.unit||state.settings.unit)}</div>
+    <span class="status-badge">${status === "ok" ? "In stock" : status === "low" ? "Low" : "Out"}</span>
+    ${compact ? "" : `
+    <div class="tag-actions">
+      <button class="btn btn-ghost btn-sm" data-edit-item="${item.id}">Edit</button>
+      <button class="btn btn-danger btn-sm" data-del-item="${item.id}">Delete</button>
+    </div>`}
+  </div>`;
+}
+
+function renderInventory(){
+  const panel = document.getElementById("panel-inventory");
+  const q = ui.invSearch.trim().toLowerCase();
+  const filtered = state.items.filter(it => !q || (it.count||"").toLowerCase().includes(q) || (it.color||"").toLowerCase().includes(q));
+  const sorted = [...filtered].sort((a,b) => (a.count||"").localeCompare(b.count||"") || (a.color||"").localeCompare(b.color||""));
+
+  panel.innerHTML = `
+    <div class="block-head">
+      <h2>Inventory</h2>
+      <button class="btn btn-primary btn-sm" id="addItemBtn">+ Add yarn</button>
+    </div>
+    <div class="panel" id="itemFormPanel" style="display:${ui.itemFormOpen ? "block" : "none"};">
+      ${itemFormHTML()}
+    </div>
+    <div class="filter-row">
+      <input type="text" id="invSearch" placeholder="Search by count or colour…" value="${escapeHTML(ui.invSearch)}" style="flex:1;min-width:160px;" />
+    </div>
+    ${sorted.length === 0
+      ? `<div class="empty">${state.items.length ? "No matches for that search." : "No yarn added yet. Tap “Add yarn” to log your first count and colour."}</div>`
+      : `<div class="tag-grid">${sorted.map(it => tagCardHTML(it, computeStock(it.id), statusOf(computeStock(it.id), Number(it.threshold)||0), false)).join("")}</div>`}
+  `;
+
+  document.getElementById("addItemBtn").addEventListener("click", () => {
+    ui.editingItemId = null;
+    ui.itemFormOpen = !ui.itemFormOpen || ui.editingItemId !== null ? true : !ui.itemFormOpen;
+    ui.itemFormOpen = true;
+    renderInventory();
+    document.getElementById("itemFormPanel").scrollIntoView({behavior:"smooth", block:"center"});
+  });
+  document.getElementById("invSearch").addEventListener("input", (e) => { ui.invSearch = e.target.value; renderInventory(); });
+
+  if(ui.itemFormOpen) wireItemForm();
+
+  panel.querySelectorAll("[data-edit-item]").forEach(btn => {
+    btn.addEventListener("click", () => { ui.editingItemId = btn.dataset.editItem; ui.itemFormOpen = true; renderInventory(); document.getElementById("itemFormPanel").scrollIntoView({behavior:"smooth", block:"center"}); });
+  });
+  panel.querySelectorAll("[data-del-item]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const id = btn.dataset.delItem;
+      const item = findItem(id);
+      const used = state.transactions.some(t => t.itemId === id);
+      confirmAction(
+        "Delete this yarn?",
+        used ? `"${itemLabel(item)}" has transaction history. Deleting it will also remove that history permanently.` : `Remove "${itemLabel(item)}" from your inventory?`,
+        async () => {
+          state.items = state.items.filter(i => i.id !== id);
+          state.transactions = state.transactions.filter(t => t.itemId !== id);
+          await saveItems(); await saveTxns();
+          showToast("Yarn deleted");
+          renderInventory();
+        }
+      );
+    });
+  });
+}
+
+function itemFormHTML(){
+  const editing = ui.editingItemId ? findItem(ui.editingItemId) : null;
+  const v = editing || { count:"", color:"", colorHex:"#7C8FA6", unit: state.settings.unit, openingStock:0, threshold: state.settings.defaultThreshold };
+  return `
+    <h3 style="font-size:15px;margin-bottom:10px;">${editing ? "Edit yarn" : "Add yarn"}</h3>
+    <div class="form-grid">
+      <div class="field"><label>Count</label><input id="f-count" type="text" placeholder="e.g. 30s, 40s Combed" value="${escapeHTML(v.count)}" /></div>
+      <div class="field"><label>Colour name</label><input id="f-color" type="text" placeholder="e.g. Sky Blue" value="${escapeHTML(v.color)}" /></div>
+      <div class="field"><label>Colour swatch</label><input id="f-colorhex" type="color" value="${escapeHTML(v.colorHex||'#7C8FA6')}" style="height:38px;padding:3px;" /></div>
+      <div class="field"><label>Unit</label>
+        <select id="f-unit">
+          ${["kg","g","cones","bags","boxes","pcs"].map(u => `<option value="${u}" ${v.unit===u?"selected":""}>${u}</option>`).join("")}
+        </select>
+      </div>
+      <div class="field"><label>${editing ? "Opening stock (base)" : "Opening stock"}</label><input id="f-opening" type="number" step="0.01" min="0" value="${v.openingStock}" /></div>
+      <div class="field"><label>Low-stock threshold</label><input id="f-threshold" type="number" step="0.01" min="0" value="${v.threshold}" /></div>
+    </div>
+    <div class="form-actions">
+      <button class="btn btn-ghost btn-sm" id="cancelItemForm">Cancel</button>
+      <button class="btn btn-primary btn-sm" id="saveItemForm">${editing ? "Save changes" : "Add to inventory"}</button>
+    </div>
+  `;
+}
+function wireItemForm(){
+  document.getElementById("cancelItemForm").addEventListener("click", () => { ui.itemFormOpen = false; ui.editingItemId = null; renderInventory(); });
+  document.getElementById("saveItemForm").addEventListener("click", async () => {
+    const count = document.getElementById("f-count").value.trim();
+    const color = document.getElementById("f-color").value.trim();
+    if(!count || !color){ showToast("Count and colour are both needed", "error"); return; }
+    const payload = {
+      count, color,
+      colorHex: document.getElementById("f-colorhex").value,
+      unit: document.getElementById("f-unit").value,
+      openingStock: Number(document.getElementById("f-opening").value) || 0,
+      threshold: Number(document.getElementById("f-threshold").value) || 0
+    };
+    if(ui.editingItemId){
+      const item = findItem(ui.editingItemId);
+      Object.assign(item, payload);
+      showToast("Yarn updated");
+    } else {
+      state.items.push(Object.assign({ id: uid("item") }, payload));
+      showToast("Yarn added to inventory");
+    }
+    await saveItems();
+    ui.itemFormOpen = false; ui.editingItemId = null;
+    renderInventory();
+  });
+}
+
+/* ---------------- Transactions ---------------- */
+function txnRowHTML(t, withActions){
+  const item = findItem(t.itemId);
+  const flow = TYPE_FLOW[t.type];
+  return `
+  <div class="txn-row">
+    <div class="txn-date">${fmtDate(t.date).replace(/, \d{4}/,"")}</div>
+    <span class="badge badge-${t.type}">${TYPE_LABELS[t.type]}</span>
+    <div class="txn-main">
+      <div class="txn-item">${item ? escapeHTML(itemLabel(item)) : "(deleted item)"}</div>
+      ${t.party ? `<div class="txn-party">${escapeHTML(t.party)}</div>` : ""}
+    </div>
+    <div class="txn-qty" style="color:${flow==='in' ? 'var(--sage)' : 'var(--rust)'};">${flow==='in'?'+':'−'}${fmtNum(t.qty)} ${escapeHTML(item ? item.unit : "")}</div>
+    ${withActions ? `
+    <div class="txn-actions">
+      <button class="icon-link" data-edit-txn="${t.id}" title="Edit">✎</button>
+      <button class="icon-link" data-del-txn="${t.id}" title="Delete">🗑</button>
+    </div>` : ""}
+  </div>`;
+}
+
+function renderTransactions(){
+  const panel = document.getElementById("panel-transactions");
+  panel.innerHTML = `
+    <div class="block-head"><h2>Log a movement</h2></div>
+    <div class="panel">${txnFormHTML()}</div>
+
+    <div class="block-head"><h2>History</h2></div>
+    <div class="filter-row">
+      <select id="filterType">
+        <option value="all">All types</option>
+        ${Object.keys(TYPE_LABELS).map(k => `<option value="${k}" ${ui.txnFilter.type===k?"selected":""}>${TYPE_LABELS[k]}</option>`).join("")}
+      </select>
+      <select id="filterItem">
+        <option value="all">All yarn</option>
+        ${state.items.map(it => `<option value="${it.id}" ${ui.txnFilter.itemId===it.id?"selected":""}>${escapeHTML(itemLabel(it))}</option>`).join("")}
+      </select>
+      <input type="date" id="filterFrom" value="${ui.txnFilter.from}" />
+      <input type="date" id="filterTo" value="${ui.txnFilter.to}" />
+      <button class="btn btn-ghost btn-sm" id="clearFilters">Clear</button>
+    </div>
+    <div id="txnListWrap" class="panel" style="padding:4px 10px;"></div>
+  `;
+
+  renderTxnList();
+  wireTxnForm();
+
+  document.getElementById("filterType").addEventListener("change", e => { ui.txnFilter.type = e.target.value; renderTxnList(); });
+  document.getElementById("filterItem").addEventListener("change", e => { ui.txnFilter.itemId = e.target.value; renderTxnList(); });
+  document.getElementById("filterFrom").addEventListener("change", e => { ui.txnFilter.from = e.target.value; renderTxnList(); });
+  document.getElementById("filterTo").addEventListener("change", e => { ui.txnFilter.to = e.target.value; renderTxnList(); });
+  document.getElementById("clearFilters").addEventListener("click", () => { ui.txnFilter = { type:"all", itemId:"all", from:"", to:"" }; renderTransactions(); });
+}
+
+function filteredTxns(){
+  return state.transactions.filter(t => {
+    if(ui.txnFilter.type !== "all" && t.type !== ui.txnFilter.type) return false;
+    if(ui.txnFilter.itemId !== "all" && t.itemId !== ui.txnFilter.itemId) return false;
+    if(ui.txnFilter.from && t.date < ui.txnFilter.from) return false;
+    if(ui.txnFilter.to && t.date > ui.txnFilter.to) return false;
+    return true;
+  }).sort((a,b) => (b.date+b.id).localeCompare(a.date+a.id));
+}
+function renderTxnList(){
+  const wrap = document.getElementById("txnListWrap");
+  const list = filteredTxns();
+  wrap.innerHTML = list.length ? list.map(t => txnRowHTML(t, true)).join("") : `<div class="empty">No entries match these filters.</div>`;
+  wrap.querySelectorAll("[data-edit-txn]").forEach(b => b.addEventListener("click", () => { ui.editingTxnId = b.dataset.editTxn; const t = state.transactions.find(x=>x.id===ui.editingTxnId); ui.txnType = t.type; renderTransactions(); window.scrollTo({top:0,behavior:"smooth"}); }));
+  wrap.querySelectorAll("[data-del-txn]").forEach(b => b.addEventListener("click", () => {
+    const id = b.dataset.delTxn;
+    confirmAction("Delete this entry?", "This will remove it from the ledger and adjust current stock accordingly.", async () => {
+      state.transactions = state.transactions.filter(t => t.id !== id);
+      await saveTxns();
+      showToast("Entry deleted");
+      renderTxnList();
+      if(ui.activeTab === "dashboard") renderDashboard();
+    });
+  }));
+}
+
+function txnFormHTML(){
+  const editing = ui.editingTxnId ? state.transactions.find(t => t.id === ui.editingTxnId) : null;
+  const v = editing || { itemId:"", qty:"", rate:"", party:"", date: todayStr(), notes:"" };
+  if(editing) ui.txnType = editing.type;
+  const partyLabel = (ui.txnType === "sale" || ui.txnType === "customer_return") ? "Customer name" : "Supplier name";
+  if(state.items.length === 0){
+    return `<div class="empty">Add at least one yarn item in the Inventory tab before logging purchases or sales.</div>`;
+  }
+  return `
+    <div class="chip-row" id="typeChips">
+      ${Object.keys(TYPE_LABELS).map(k => `<button type="button" class="chip ${ui.txnType===k?'active':''}" data-flow="${TYPE_FLOW[k]}" data-type="${k}">${TYPE_LABELS[k]}</button>`).join("")}
+    </div>
+    <div class="form-grid" style="margin-top:10px;">
+      <div class="field span2"><label>Yarn</label>
+        <select id="t-item">
+          <option value="">Select count &amp; colour…</option>
+          ${state.items.map(it => `<option value="${it.id}" ${v.itemId===it.id?"selected":""}>${escapeHTML(itemLabel(it))} — currently ${fmtNum(computeStock(it.id))} ${escapeHTML(it.unit)}</option>`).join("")}
+        </select>
+      </div>
+      <div class="field"><label>Quantity</label><input id="t-qty" type="number" min="0" step="0.01" value="${v.qty}" /></div>
+      <div class="field"><label>Rate per unit (optional)</label><input id="t-rate" type="number" min="0" step="0.01" value="${v.rate}" /></div>
+      <div class="field"><label id="t-party-label">${partyLabel}</label><input id="t-party" type="text" value="${escapeHTML(v.party)}" /></div>
+      <div class="field"><label>Date</label><input id="t-date" type="date" value="${v.date}" /></div>
+      <div class="field span2"><label>Notes (optional)</label><input id="t-notes" type="text" value="${escapeHTML(v.notes||"")}" /></div>
+    </div>
+    <div class="form-actions">
+      ${editing ? `<button class="btn btn-ghost btn-sm" id="cancelTxnEdit">Cancel</button>` : ""}
+      <button class="btn btn-primary btn-sm" id="saveTxnForm">${editing ? "Save changes" : "Log entry"}</button>
+    </div>
+  `;
+}
+function wireTxnForm(){
+  if(state.items.length === 0) return;
+  document.querySelectorAll("#typeChips .chip").forEach(c => {
+    c.addEventListener("click", () => { ui.txnType = c.dataset.type; renderTransactions(); });
+  });
+  const cancelBtn = document.getElementById("cancelTxnEdit");
+  if(cancelBtn) cancelBtn.addEventListener("click", () => { ui.editingTxnId = null; renderTransactions(); });
+
+  document.getElementById("saveTxnForm").addEventListener("click", async () => {
+    const itemId = document.getElementById("t-item").value;
+    const qty = Number(document.getElementById("t-qty").value);
+    const date = document.getElementById("t-date").value || todayStr();
+    if(!itemId){ showToast("Pick which yarn this entry is for", "error"); return; }
+    if(!qty || qty <= 0){ showToast("Enter a quantity greater than 0", "error"); return; }
+
+    const item = findItem(itemId);
+    if((ui.txnType === "sale" || ui.txnType === "supplier_return")){
+      const currentStock = computeStock(itemId) + (ui.editingTxnId ? (state.transactions.find(t=>t.id===ui.editingTxnId).itemId===itemId ? Number(state.transactions.find(t=>t.id===ui.editingTxnId).qty) : 0) : 0);
+      if(qty > currentStock){ showToast(`Heads up: that's more than the ${fmtNum(currentStock)} ${item.unit} currently in stock — saved anyway`, "error"); }
+    }
+
+    const payload = {
+      type: ui.txnType, itemId, qty,
+      rate: document.getElementById("t-rate").value ? Number(document.getElementById("t-rate").value) : null,
+      party: document.getElementById("t-party").value.trim(),
+      date,
+      notes: document.getElementById("t-notes").value.trim()
+    };
+    if(ui.editingTxnId){
+      Object.assign(state.transactions.find(t => t.id === ui.editingTxnId), payload);
+      showToast("Entry updated");
+    } else {
+      state.transactions.push(Object.assign({ id: uid("txn") }, payload));
+      showToast("Entry logged");
+    }
+    await saveTxns();
+    ui.editingTxnId = null;
+    renderTransactions();
+  });
+}
+
+/* ---------------- Reports ---------------- */
+function renderReports(){
+  const panel = document.getElementById("panel-reports");
+  if(!ui.reportRange.from){
+    const d = new Date(); d.setDate(1);
+    ui.reportRange.from = new Date(d.getTime() - d.getTimezoneOffset()*60000).toISOString().slice(0,10);
+  }
+  if(!ui.reportRange.to) ui.reportRange.to = todayStr();
+
+  const from = ui.reportRange.from, to = ui.reportRange.to;
+  const inRange = state.transactions.filter(t => t.date >= from && t.date <= to);
+  const sums = { purchase:{qty:0,val:0}, sale:{qty:0,val:0}, customer_return:{qty:0,val:0}, supplier_return:{qty:0,val:0} };
+  inRange.forEach(t => {
+    const v = (Number(t.qty)||0) * (Number(t.rate)||0);
+    sums[t.type].qty += Number(t.qty)||0;
+    sums[t.type].val += v;
+  });
+
+  panel.innerHTML = `
+    <div class="block-head"><h2>Reports</h2></div>
+    <div class="filter-row">
+      <label style="font-size:12.5px;align-self:center;color:var(--ink-soft);">From</label>
+      <input type="date" id="repFrom" value="${from}" />
+      <label style="font-size:12.5px;align-self:center;color:var(--ink-soft);">To</label>
+      <input type="date" id="repTo" value="${to}" />
+    </div>
+    <div class="stat-row">
+      <div class="stat-card"><div class="label">Purchased</div><div class="value">${fmtNum(sums.purchase.qty)}</div><div class="hint">₹${fmtNum(sums.purchase.val)} value</div></div>
+      <div class="stat-card"><div class="label">Sold</div><div class="value">${fmtNum(sums.sale.qty)}</div><div class="hint">₹${fmtNum(sums.sale.val)} value</div></div>
+      <div class="stat-card"><div class="label">Customer returns</div><div class="value">${fmtNum(sums.customer_return.qty)}</div></div>
+      <div class="stat-card"><div class="label">Supplier returns</div><div class="value">${fmtNum(sums.supplier_return.qty)}</div></div>
+    </div>
+
+    <div class="block-head"><h2>Stock by colour</h2>
+      <div style="display:flex;gap:8px;">
+        <button class="btn btn-ghost btn-sm" id="exportInv">Export inventory CSV</button>
+        <button class="btn btn-ghost btn-sm" id="exportTxn">Export transactions CSV</button>
+      </div>
+    </div>
+    <div class="panel" style="overflow-x:auto;">
+      ${state.items.length === 0 ? `<div class="empty">No inventory yet.</div>` : `
+      <table class="report-table">
+        <thead><tr><th>Count</th><th>Colour</th><th>Opening (range)</th><th>In</th><th>Out</th><th>Closing</th><th>Status</th></tr></thead>
+        <tbody>
+          ${state.items.map(it => {
+            const openingAtRange = computeStockAsOf(it.id, from);
+            const inQty = inRange.filter(t=>t.itemId===it.id && TYPE_FLOW[t.type]==="in").reduce((s,t)=>s+Number(t.qty||0),0);
+            const outQty = inRange.filter(t=>t.itemId===it.id && TYPE_FLOW[t.type]==="out").reduce((s,t)=>s+Number(t.qty||0),0);
+            const closing = computeStock(it.id);
+            const status = statusOf(closing, Number(it.threshold)||0);
+            return `<tr>
+              <td class="txt">${escapeHTML(it.count)}</td>
+              <td class="txt">${escapeHTML(it.color)}</td>
+              <td>${fmtNum(openingAtRange)}</td>
+              <td style="color:var(--sage);">+${fmtNum(inQty)}</td>
+              <td style="color:var(--rust);">−${fmtNum(outQty)}</td>
+              <td><strong>${fmtNum(closing)}</strong></td>
+              <td class="txt">${status==="ok"?"In stock":status==="low"?"Low":"Out"}</td>
+            </tr>`;
+          }).join("")}
+        </tbody>
+      </table>`}
+    </div>
+  `;
+
+  document.getElementById("repFrom").addEventListener("change", e => { ui.reportRange.from = e.target.value; renderReports(); });
+  document.getElementById("repTo").addEventListener("change", e => { ui.reportRange.to = e.target.value; renderReports(); });
+  document.getElementById("exportInv").addEventListener("click", exportInventoryCSV);
+  document.getElementById("exportTxn").addEventListener("click", exportTransactionsCSV);
+}
+
+function downloadCSV(filename, rows){
+  const csv = rows.map(r => r.map(cell => {
+    const s = String(cell==null?"":cell);
+    return /[",\\n]/.test(s) ? '"' + s.replace(/"/g,'""') + '"' : s;
+  }).join(",")).join("\r\n");
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+function exportInventoryCSV(){
+  const rows = [["Count","Colour","Unit","Current Stock","Threshold","Status"]];
+  state.items.forEach(it => {
+    const stock = computeStock(it.id);
+    rows.push([it.count, it.color, it.unit, stock, it.threshold, statusOf(stock, Number(it.threshold)||0)]);
+  });
+  downloadCSV("inventory.csv", rows);
+  showToast("Inventory exported");
+}
+function exportTransactionsCSV(){
+  const rows = [["Date","Type","Count","Colour","Quantity","Unit","Rate","Party","Notes"]];
+  [...state.transactions].sort((a,b)=>a.date.localeCompare(b.date)).forEach(t => {
+    const item = findItem(t.itemId);
+    rows.push([t.date, TYPE_LABELS[t.type], item?item.count:"", item?item.color:"", t.qty, item?item.unit:"", t.rate||"", t.party||"", t.notes||""]);
+  });
+  downloadCSV("transactions.csv", rows);
+  showToast("Transactions exported");
+}
+
+/* ---------------- Init ---------------- */
+async function init(){
+  await checkStorageAvailable();
+  state.items = await getStored("items", []);
+  state.transactions = await getStored("transactions", []);
+  state.settings = await getStored("settings", { shopName: "My Yarn Store", unit: "kg", defaultThreshold: 10 });
+  renderShell();
+  renderTabs();
+}
+init();
+
+})();
+</script>
+</body>
+</html>
